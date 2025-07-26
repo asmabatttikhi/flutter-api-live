@@ -3,56 +3,64 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 
 const app = express();
-const port = process.env.PORT || 3000;
-
 app.use(cors());
 app.use(bodyParser.json());
 
 let ads = [];
+let currentId = 1;
 
-app.get('/api/ads', (req, res) => {
-  res.json(ads);
-});
-
+// ✅ نشر إعلان جديد
 app.post('/api/ads', (req, res) => {
   const ad = req.body;
-  ad.id = ads.length + 1;
+  ad.id = currentId++;
   ads.push(ad);
   res.status(201).json(ad);
 });
 
-app.get('/', (req, res) => {
-  res.send('API يعمل 🎉');
+// ✅ جلب كل الإعلانات
+app.get('/api/ads', (req, res) => {
+  res.json(ads);
 });
 
+// ✅ جلب إعلان حسب ID
+app.get('/api/ads/:id', (req, res) => {
+  const adId = parseInt(req.params.id);
+  const ad = ads.find(a => a.id === adId);
+  if (ad) {
+    res.json(ad);
+  } else {
+    res.status(404).json({ message: 'الإعلان غير موجود' });
+  }
+});
 
-// تحديث إعلان
+// ✅ تحديث إعلان
 app.put('/api/ads/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const updatedAd = req.body;
+  const adId = parseInt(req.params.id);
+  const index = ads.findIndex(a => a.id === adId);
 
-  const index = ads.findIndex((ad) => ad.id === id);
   if (index !== -1) {
-    ads[index] = { ...ads[index], ...updatedAd };
+    ads[index] = { ...ads[index], ...req.body, id: adId };
     res.json(ads[index]);
   } else {
     res.status(404).json({ message: 'الإعلان غير موجود' });
   }
 });
 
-// حذف إعلان
+// ✅ حذف إعلان
 app.delete('/api/ads/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const index = ads.findIndex((ad) => ad.id === id);
+  const adId = parseInt(req.params.id);
+  const index = ads.findIndex(ad => ad.id === adId);
+
   if (index !== -1) {
     ads.splice(index, 1);
-    res.status(204).send(); // No Content
+    res.status(204).send(); // حذف ناجح بدون محتوى
   } else {
     res.status(404).json({ message: 'الإعلان غير موجود' });
   }
 });
 
-
-app.listen(port, () => {
-  console.log(`API شغال على http://localhost:${port}`);
+// ✅ تشغيل الخادم
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
 });
