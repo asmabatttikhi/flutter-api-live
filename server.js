@@ -1,69 +1,84 @@
 const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
-const mongoose = require('mongoose');
-const Ad = require('./models/Ad'); // ← تأكد من وجود models/Ad.js
+const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// MongoDB Connection
-mongoose.connect('mongodb+srv://asmaaalbattikhi:ZAQzaq*100@cluster0.krntcyr.mongodb.net/flutter_ads?retryWrites=true&w=majority&appName=Cluster0', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('✅ Connected to MongoDB'))
-.catch((err) => console.error('❌ MongoDB connection error:', err));
+// إنشاء قاعدة البيانات
+const db = new sqlite3.Database('./ads.db');
 
-// Routes
+// إنشاء جدول الإعلانات إذا لم يكن موجوداً
+db.run(`CREATE TABLE IF NOT EXISTS ads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT,
+  description TEXT,
+  location TEXT,
+  price REAL,
+  images TEXT, -- سيتم تخزينها كـ JSON string
+  phone TEXT,
+  category TEXT
+)`);
 
-// Get all ads
-app.get('/api/ads', async (req, res) => {
-  try {
-    const ads = await Ad.find().sort({ createdAt: -1 });
+// ✅ Get all ads
+app.get('/api/ads', (req, res) => {
+  db.all('SELECT * FROM ads', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    const ads = rows.map(row => ({
+      ...row,
+      images: JSON.parse(row.images)
+    }));
     res.json(ads);
-  } catch (error) {
-    res.status(500).json({ message: '❌ Failed to fetch ads' });
-  }
+  });
 });
 
-// Create new ad
-app.post('/api/ads', async (req, res) => {
-  try {
-    const newAd = new Ad(req.body);
-    await newAd.save();
-    res.status(201).json({ message: '✅ Ad created successfully' });
-  } catch (error) {
-    res.status(400).json({ message: '❌ Failed to create ad' });
-  }
+// ✅ Post new ad
+app.post('/api/ads', (req, res) => {
+  const { title, description, location, price, images, phone, category } = req.body;
+  db.run(
+    `INSERT INTO ads (title, description, location, price, images, phone, category)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [title, description, location, price, JSON.stringify(images), phone, category],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+
+      res.status(201).json({ id: this.lastID });
+    }
+  );
 });
 
-// Update ad
-app.put('/api/ads/:id', async (req, res) => {
-  try {
-    const updatedAd = await Ad.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updatedAd) return res.status(404).json({ message: '❌ Ad not found' });
-    res.json({ message: '✅ Ad updated successfully' });
-  } catch (error) {
-    res.status(400).json({ message: '❌ Failed to update ad' });
-  }
+// ✅ Update ad
+app.put('/api/ads/:id', (req, res) => {
+  const { id } = req.params;
+  const { title, description, location, price, images, phone, category } = req.body;
+
+  db.run(
+    `UPDATE ads SET title=?, description=?, location=?, price=?, images=?, phone=?, category=? WHERE id=?`,
+    [title, description, location, price, JSON.stringify(images), phone, category, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+
+      res.status(200).json({ updated: this.changes });
+    }
+  );
 });
 
-// Delete ad
-app.delete('/api/ads/:id', async (req, res) => {
-  try {
-    const deleted = await Ad.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: '❌ Ad not found' });
+// ✅ Delete ad
+app.delete('/api/ads/:id', (req, res) => {
+  const { id } = req.params;
+  db.run(`DELETE FROM ads WHERE id=?`, [id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+
     res.status(204).end();
-  } catch (error) {
-    res.status(500).json({ message: '❌ Failed to delete ad' });
-  }
+  });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+// ✅ Start server
+app.listen(port, () => {
+  console.log(`✅ Server running at http://localhost:${port}`);
 });
